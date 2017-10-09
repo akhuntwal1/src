@@ -27,6 +27,15 @@ using std::pair;
 using __gnu_cxx::hash_map;
 using __gnu_cxx::hash;
 
+struct trace_element
+{
+  int thread_id;
+  vector<int> backtrack;
+  vector<int> sleepset;
+  vector<int> done;
+};
+
+
 
 class Scheduler : public Thread
 {
@@ -99,7 +108,10 @@ public:
   bool found_enough_error() { return (num_of_errors_detected >= max_errors); }
 
 
-    
+  vector<trace_element> create_trace();
+  void recreate_statestack(vector<trace_element> trace);
+
+
 public:
   EventBuffer event_buffer;
   EventGraph  event_graph;

@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 #include <signal.h>
 #include <netinet/in.h>
@@ -126,6 +127,137 @@ void sig_pipe(int signo) {
 //     The implementation of Scheduler
 // 
 //////////////////////////////////////////////////////////////////////////////
+
+
+vector<trace_element> Scheduler::create_trace()
+{
+	vector<trace_element> trace;
+
+	State * temp = NULL;
+	for(int i=0; i<state_stack.depth(); i++)
+	{
+		trace_element tre;
+		temp = state_stack[i];
+
+		tre.thread_id = temp->sel_event.thread_id;
+
+		TransitionSet::iterator it;
+		for(it=temp->backtrack.begin(); it!=temp->backtrack.end(); it++)
+		{
+			tre.backtrack.push_back(it->first);
+		}
+		for(it=temp->sleepset.begin(); it!=temp->sleepset.end(); it++)
+		{
+			tre.sleepset.push_back(it->first);
+		}
+		for(it=temp->done.begin(); it!=temp->done.end(); it++)
+		{
+			tre.done.push_back(it->first);
+		}
+
+		trace.push_back(tre);	
+	}
+
+
+#ifdef DEBUG 
+	
+	cout<<"PRINTING THE CREATED TRACE\n";
+	for(int i=0; i<trace.size();i++)
+	{
+		cout<<"SELECTED THREAD ID - "<<trace[i].thread_id<<endl;
+
+		cout<<"BACKTRACK - ";
+		for(int j=0;j<trace[i].backtrack.size();j++)
+		{
+			cout<<trace[i].backtrack[j]<<" ";
+		}
+
+		cout<<"\nSLEEPSET - ";
+		for(int j=0;j<trace[i].sleepset.size();j++)
+		{
+			cout<<trace[i].sleepset[j]<<" ";
+		}
+
+		cout<<"\nDONE - ";
+		for(int j=0;j<trace[i].done.size();j++)
+		{
+			cout<<trace[i].done[j]<<" ";
+		}
+	}
+
+#endif
+
+	return trace;
+}
+
+void Scheduler::recreate_statestack(vector<trace_element> trace)
+{
+	State * state = state_stack.top();
+	while(state!=NULL)
+	{
+		state_stack.pop();
+		delete state;
+		state = state_stack.top();
+	}
+
+	//state_stack.stack.clear();
+
+	event_buffer.reset();
+	thread_table.reset();
+
+	int step_counter=0;
+	InspectEvent event;
+	TransitionSet::iterator tit;
+	State * init_state, *new_state, *current_state;
+
+	cout<<"\n\nHAS BACKTRACK POINTS = "<<state_stack.has_backtrack_points()<<endl;
+
+	this->exec_test_target(setting.target.c_str());
+
+	init_state = this->get_initial_state();
+	state_stack.push(init_state);
+
+	current_state = state_stack.top();
+	while(step_counter <trace.size()) 
+	{
+		for(tit=current_state->prog_state->enabled.begin(); tit!=current_state->prog_state->enabled.end(); tit++)
+		{
+			if(trace[step_counter].thread_id == tit->first)
+			{
+				event = tit->second[0];  //take first event from the enabled thread
+			}
+		}
+
+		if(step_counter != trace.size()-1)
+			new_state = next_state(current_state, event, event_buffer);
+
+		for(tit=current_state->prog_state->enabled.begin(); tit!=current_state->prog_state->enabled.end(); tit++)
+		{
+			if( trace[step_counter].backtrack.end()!= find(trace[step_counter].backtrack.begin(), trace[step_counter].backtrack.end(), tit->first))
+				current_state->backtrack.insert(tit->second[0]);
+
+			if( trace[step_counter].sleepset.end()!= find(trace[step_counter].sleepset.begin(), trace[step_counter].sleepset.end(), tit->first))
+				current_state->sleepset.insert(tit->second[0]);
+
+			if( trace[step_counter].done.end()!= find(trace[step_counter].done.begin(), trace[step_counter].done.end(), tit->first))
+				current_state->done.insert(tit->second[0]);
+		}
+
+		if(step_counter != trace.size()-1)
+		{
+			state_stack.push(new_state);
+			assert(new_state->prev == current_state);
+			current_state = new_state;
+		}
+
+		step_counter++;
+
+	}
+	
+}
+
+
+
 
 Scheduler::Scheduler() :
 		max_errors(1000000), num_of_errors_detected(0), num_of_transitions(0), num_of_states(
@@ -926,6 +1058,9 @@ void Scheduler::backtrack_checking() {
 		//cout << "Kill  " << sut_pid << flush << endl;
 		num_killed++;
 	}
+
+	vector<trace_element> trace = create_trace();
+	recreate_statestack(trace);
 
 }
 
