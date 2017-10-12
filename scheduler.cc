@@ -256,7 +256,333 @@ void Scheduler::recreate_statestack(vector<trace_element> trace)
 	
 }
 
+void Scheduler::merge_trace_to_tree(vector<trace_element> trace)
+{
+	if(sufficient_tree.empty())
+	{
+		for(int i=0;i<trace.size();i++)
+		{
+			tree_element TE;
+			pair<int,int> temp;
+			pair<bool,int> temp1;
 
+			temp.first = trace[i].thread_id;
+			
+			if(i==trace.size()-1)
+				temp.second = -1;			//when it's the last state of a trace, there is no selected event from that state 
+											//or atleast currently the state has an open end and the trace is yet to be completed
+			else
+				temp.second = i+1;
+
+			TE.children.push_back(temp);
+
+			TE.sleepset = trace[i].sleepset;
+			TE.done = trace[i].done;
+
+			for(int j=0;j<trace[i].backtrack.size();j++)
+			{
+				temp1.first = false;
+				temp1.second = trace[i].backtrack[j];
+
+				TE.backtrack.push_back(temp1);
+			}
+
+			sufficient_tree.push_back(TE);
+		}
+	}
+	else
+	{
+		int current_node = 0;
+		bool found = true;
+		bool never_go_back = false;
+		bool once = false;
+
+
+		for(int i=0;i<trace.size();i++)
+		{
+			//check if current step equal to any of the branches of current node in sufficient tree.
+			if(found)
+			{
+				found = false;
+				for(int j=0;j < sufficient_tree[current_node].children.size(); j++)
+				{
+					if(trace[i].thread_id == sufficient_tree[current_node].children[j].first)
+					{
+						//merge backtracks, sleepset, done set of trace[i] with current_node of sufficient tree
+
+						//for backtrack set
+						for(int k=0; k<trace[i].backtrack.size(); k++)
+						{
+							bool there = false; 
+							//if trace[i].backtrack[k] is not a member of current node's backtrack, then add it.
+							for(int l=0; l< sufficient_tree[current_node].backtrack.size(); l++)
+							{
+								if(sufficient_tree[current_node].backtrack[l].second == trace[i].backtrack[k])
+									there = true;
+							}
+							if(!there)
+							{
+								pair<bool,int> temp;
+								temp.first = false;
+								temp.second = trace[i].backtrack[k];
+
+								sufficient_tree[current_node].backtrack.push_back(temp);
+							}
+						}
+						//for sleepset
+						for(int k=0; k<trace[i].sleepset.size(); k++)
+						{
+							bool there = false; 
+							//if trace[i].sleepset[k] is not a member of current node's sleepset, then add it.
+							for(int l=0; l< sufficient_tree[current_node].sleepset.size(); l++)
+							{
+								if(sufficient_tree[current_node].sleepset[l] == trace[i].sleepset[k])
+									there = true;
+							}
+							if(!there)
+								sufficient_tree[current_node].sleepset.push_back(trace[i].sleepset[k]);
+						}
+						//for done set
+						for(int k=0; k<trace[i].done.size(); k++)
+						{
+							bool there = false; 
+							//if trace[i].done[k] is not a member of current node's done, then add it.
+							for(int l=0; l< sufficient_tree[current_node].done.size(); l++)
+							{
+								if(sufficient_tree[current_node].done[l] == trace[i].done[k])
+									there = true;
+							}
+							if(!there)
+								sufficient_tree[current_node].done.push_back(trace[i].done[k]);
+						}
+
+						current_node = sufficient_tree[current_node].children[j].second;
+						found = true;
+						break;
+					}
+				}
+			}
+			//time to deviate from the current trace and create a new branch from current node
+			if(!found)
+			{
+				//add a child to the children vector of current_node
+
+				if(once == false)
+				{
+					pair<int,int> temp;
+
+					temp.first = trace[i].thread_id;
+					temp.second = sufficient_tree.size();   //we'll push the new child node at end of sufficient tree vector
+
+					sufficient_tree[current_node].children.push_back(temp);
+
+
+
+					//merging backtracks, sleepset, done
+					//for backtrack
+					for(int k=0; k<trace[i].backtrack.size(); k++)
+					{
+						bool there = false; 
+						//if trace[i].backtrack[k] is not a member of current node's backtrack, then add it.
+						for(int l=0; l< sufficient_tree[current_node].backtrack.size(); l++)
+						{
+							if(sufficient_tree[current_node].backtrack[l].second == trace[i].backtrack[k])
+								there = true;
+						}
+						if(!there)
+						{
+							pair<bool,int> temp;
+							temp.first = false;
+							temp.second = trace[i].backtrack[k];
+
+							sufficient_tree[current_node].backtrack.push_back(temp);
+						}
+					}
+					//for sleepset
+					for(int k=0; k<trace[i].sleepset.size(); k++)
+					{
+						bool there = false; 
+						//if trace[i].sleepset[k] is not a member of current node's sleepset, then add it.
+						for(int l=0; l< sufficient_tree[current_node].sleepset.size(); l++)
+						{
+							if(sufficient_tree[current_node].sleepset[l] == trace[i].sleepset[k])
+								there = true;
+						}
+						if(!there)
+							sufficient_tree[current_node].sleepset.push_back(trace[i].sleepset[k]);
+					}
+					//for done set
+					for(int k=0; k<trace[i].done.size(); k++)
+					{
+						bool there = false; 
+						//if trace[i].done[k] is not a member of current node's done, then add it.
+						for(int l=0; l< sufficient_tree[current_node].done.size(); l++)
+						{
+							if(sufficient_tree[current_node].done[l] == trace[i].done[k])
+								there = true;
+						}
+						if(!there)
+							sufficient_tree[current_node].done.push_back(trace[i].done[k]);
+					}
+
+					once = true;							//since this action has to be done only once
+				}
+				else
+				{
+					tree_element TE;
+					pair<int,int> temp;
+					pair<bool,int> temp1;
+
+					temp.first = trace[i].thread_id;
+					
+					if(i==trace.size()-1)
+						temp.second = -1;			//when it's the last state of a trace, there is no selected event from that state 
+													//or atleast currently the state has an open end and the trace is yet to be completed
+					else
+						temp.second = sufficient_tree.size();
+
+					TE.children.push_back(temp);
+
+					TE.sleepset = trace[i].sleepset;
+					TE.done = trace[i].done;
+
+					for(int j=0;j<trace[i].backtrack.size();j++)
+					{
+						temp1.first = false;
+						temp1.second = trace[i].backtrack[j];
+
+						TE.backtrack.push_back(temp1);
+					}
+
+					sufficient_tree.push_back(TE);
+				}
+			}
+		}
+	}
+
+
+
+	cout<<"\n---------- DISPLAYING THE TREE ------------\n";
+	for(int i=0;i<sufficient_tree.size();i++)
+	{
+		cout<<"\nNODE - "<<i;
+		for(int j=0;j<sufficient_tree[i].children.size();j++)
+		{
+			cout<<"tid - "<<sufficient_tree[i].children[j].first<<"  node - "<<sufficient_tree[i].children[j].second<<endl;
+		}
+	}
+}
+
+
+vector<trace_element> Scheduler::extract_trace()
+{
+
+	//do DFS of sufficient tree to find out a node with <false, some_int> in backtrack
+	vector<trace_element> trace;
+
+	vector<int> dfs_stack;
+	map<int,bool> visited;
+	int found_bt = -1;
+
+	int current_node = 0;
+	dfs_stack.push_back(0);
+
+	while(!dfs_stack.empty())
+	{
+		current_node = dfs_stack.back();
+		for(int i=0;i<sufficient_tree[current_node].backtrack.size();i++)
+		{
+			if(sufficient_tree[current_node].backtrack[i].first == false)
+			{
+				found_bt = sufficient_tree[current_node].backtrack[i].second;
+				goto beta;
+			}		
+		}
+
+		visited[current_node] = true;
+		for(int i=0;i<sufficient_tree[current_node].children.size();i++)
+		{
+			if(visited[sufficient_tree[current_node].children[i].second] == false)
+			{
+				dfs_stack.push_back(sufficient_tree[current_node].children[i].second);
+				goto alpha;
+			}
+		}
+		dfs_stack.pop_back();
+		alpha:
+		;
+	}
+
+	beta:
+	if(found_bt != -1)
+	{
+		for(int i=0;i<dfs_stack.size();i++)
+		{
+			tree_element TE = sufficient_tree[dfs_stack[i]];
+			trace_element tre;
+
+			if(i != dfs_stack.size()-1)
+			{
+				for(int j=0;j<TE.children.size();j++)
+				{
+					if(TE.children[j].second == dfs_stack[i+1])
+					{
+						tre.thread_id = TE.children[j].first;
+						break;
+					}
+				}
+			}
+			else
+				tre.thread_id = found_bt;
+
+			for(int j=0;j<TE.backtrack.size();j++)
+			{
+				if(TE.backtrack[j].first == false)
+					tre.backtrack.push_back(TE.backtrack[j].second);
+			}
+
+			tre.sleepset = TE.sleepset;
+			tre.done = TE.done;
+
+			trace.push_back(tre);
+		}
+
+		trace_element tre;
+		tre.thread_id = -1;
+
+		trace.push_back(tre);
+	}
+
+#ifdef DEBUG 
+	
+	cout<<"PRINTING THE EXTRACTED TRACE\n";
+	for(int i=0; i<trace.size();i++)
+	{
+		cout<<"SELECTED THREAD ID - "<<trace[i].thread_id<<endl;
+
+		cout<<"BACKTRACK - ";
+		for(int j=0;j<trace[i].backtrack.size();j++)
+		{
+			cout<<trace[i].backtrack[j]<<" ";
+		}
+
+		cout<<"\nSLEEPSET - ";
+		for(int j=0;j<trace[i].sleepset.size();j++)
+		{
+			cout<<trace[i].sleepset[j]<<" ";
+		}
+
+		cout<<"\nDONE - ";
+		for(int j=0;j<trace[i].done.size();j++)
+		{
+			cout<<trace[i].done[j]<<" ";
+		}
+	}
+
+#endif
+
+	return trace;
+}
 
 
 Scheduler::Scheduler() :
@@ -870,6 +1196,9 @@ void Scheduler::monitor_first_run() {
 	}
 	verbose(4,state_stack.toString());
 
+	vector<trace_element> trace = create_trace();
+	merge_trace_to_tree(trace);
+
 }
 
 bool Scheduler::examine_state(State * old_state, State * new_state) {
@@ -1060,6 +1389,9 @@ void Scheduler::backtrack_checking() {
 	}
 
 	vector<trace_element> trace = create_trace();
+	merge_trace_to_tree(trace);
+
+	vector<trace_element> trace1 = extract_trace();
 	recreate_statestack(trace);
 
 }
