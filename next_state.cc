@@ -72,6 +72,7 @@ State * next_state(State* state,
   
   // state->check_race();
 
+  cout<<event.toString()<<endl;
   new_state = new State();
 
   //*new_state = *state;

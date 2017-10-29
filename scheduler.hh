@@ -139,6 +139,7 @@ public:
   int run_counter;
   bool found_bug; 
   StateStack state_stack;
+  bool DONE;
 
   vector<InspectEvent> error_trace;  //RSS
   int exit_status;                   //RSS

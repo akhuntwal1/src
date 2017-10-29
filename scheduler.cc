@@ -166,7 +166,7 @@ vector<trace_element> Scheduler::create_trace()
 	{
 		cout<<"SELECTED THREAD ID - "<<trace[i].thread_id<<endl;
 
-		cout<<"BACKTRACK - ";
+		cout<<"-------------------#######  BACKTRACK - ";
 		for(int j=0;j<trace[i].backtrack.size();j++)
 		{
 			cout<<trace[i].backtrack[j]<<" ";
@@ -205,6 +205,9 @@ void Scheduler::recreate_statestack(vector<trace_element> trace)
 	event_buffer.reset();
 	thread_table.reset();
 
+	if(trace.empty())
+		return;
+
 	int step_counter=0;
 	InspectEvent event;
 	TransitionSet::iterator tit;
@@ -218,39 +221,74 @@ void Scheduler::recreate_statestack(vector<trace_element> trace)
 	state_stack.push(init_state);
 
 	current_state = state_stack.top();
-	while(step_counter <trace.size()) 
+	while(step_counter <trace.size()-1) 
 	{
 		for(tit=current_state->prog_state->enabled.begin(); tit!=current_state->prog_state->enabled.end(); tit++)
 		{
 			if(trace[step_counter].thread_id == tit->first)
 			{
 				event = tit->second[0];  //take first event from the enabled thread
+				goto zeta;
 			}
 		}
-
-		if(step_counter != trace.size()-1)
-			new_state = next_state(current_state, event, event_buffer);
-
-		for(tit=current_state->prog_state->enabled.begin(); tit!=current_state->prog_state->enabled.end(); tit++)
+		cout<<" \nTID WTF = "<<trace[step_counter].thread_id<<"STEP COUNTER = "<<step_counter;
+		//assert(false);
+		zeta:
+		//if(step_counter != trace.size()-2)
 		{
-			if( trace[step_counter].backtrack.end()!= find(trace[step_counter].backtrack.begin(), trace[step_counter].backtrack.end(), tit->first))
-				current_state->backtrack.insert(tit->second[0]);
+			for(tit=current_state->prog_state->enabled.begin(); tit!=current_state->prog_state->enabled.end(); tit++)
+			{
+				if( trace[step_counter].backtrack.end()!= find(trace[step_counter].backtrack.begin(), trace[step_counter].backtrack.end(), tit->first))
+					current_state->backtrack.insert(tit->second[0]);
 
-			if( trace[step_counter].sleepset.end()!= find(trace[step_counter].sleepset.begin(), trace[step_counter].sleepset.end(), tit->first))
-				current_state->sleepset.insert(tit->second[0]);
+				if( trace[step_counter].sleepset.end()!= find(trace[step_counter].sleepset.begin(), trace[step_counter].sleepset.end(), tit->first))
+					current_state->sleepset.insert(tit->second[0]);
 
-			if( trace[step_counter].done.end()!= find(trace[step_counter].done.begin(), trace[step_counter].done.end(), tit->first))
-				current_state->done.insert(tit->second[0]);
+				if( trace[step_counter].done.end()!= find(trace[step_counter].done.begin(), trace[step_counter].done.end(), tit->first))
+					current_state->done.insert(tit->second[0]);
+			}
 		}
+		
+		new_state = next_state(current_state, event, event_buffer);
 
-		if(step_counter != trace.size()-1)
-		{
-			state_stack.push(new_state);
-			assert(new_state->prev == current_state);
-			current_state = new_state;
-		}
+
+
+		state_stack.push(new_state);
+		assert(new_state->prev == current_state);
+		current_state = new_state;
 
 		step_counter++;
+
+	}
+
+
+	cout<<"\n---------------- PRINTING THE RECREATED STATESTACK -----------------\n";
+	for(int i=0;i<state_stack.depth();i++)
+	{
+		state = state_stack[i];
+
+		TransitionSet::iterator it;
+
+		cout<<" ------------- SELECTED TID  === "<<state->sel_event.thread_id;
+
+		cout<<"\n -- BACKTRACK -- = ";
+		for(it=state->backtrack.begin(); it!=state->backtrack.end(); it++)
+		{
+			cout<<it->first<<" ";
+		}
+		cout<<"\n -- SLEEPSET -- = ";
+		for(it=state->sleepset.begin(); it!=state->sleepset.end(); it++)
+		{
+			cout<<it->first<<"   ";
+			cout<<it->second[0].toString()<<endl;
+			cout<<"size of sleepset thread it->first "<<it->second.size()<<endl;
+		}
+		cout<<"\n -- DONE -- = ";
+		for(it=state->done.begin(); it!=state->done.end(); it++)
+		{
+			cout<<it->first<<" ";
+		}
+
 
 	}
 	
@@ -258,7 +296,7 @@ void Scheduler::recreate_statestack(vector<trace_element> trace)
 
 void Scheduler::merge_trace_to_tree(vector<trace_element> trace)
 {
-	if(sufficient_tree.empty())
+	if(sufficient_tree.empty())				//No trace has been added yet
 	{
 		for(int i=0;i<trace.size();i++)
 		{
@@ -439,7 +477,7 @@ void Scheduler::merge_trace_to_tree(vector<trace_element> trace)
 						temp.second = -1;			//when it's the last state of a trace, there is no selected event from that state 
 													//or atleast currently the state has an open end and the trace is yet to be completed
 					else
-						temp.second = sufficient_tree.size();
+						temp.second = sufficient_tree.size()+1;
 
 					TE.children.push_back(temp);
 
@@ -468,7 +506,12 @@ void Scheduler::merge_trace_to_tree(vector<trace_element> trace)
 		cout<<"\nNODE - "<<i;
 		for(int j=0;j<sufficient_tree[i].children.size();j++)
 		{
-			cout<<"tid - "<<sufficient_tree[i].children[j].first<<"  node - "<<sufficient_tree[i].children[j].second<<endl;
+			cout<<"tid - "<<sufficient_tree[i].children[j].first<<"  child_node - "<<sufficient_tree[i].children[j].second<<endl;
+		}
+		cout<<"--  backtrack for the NODE-- \n";
+		for(int j=0;j<sufficient_tree[i].backtrack.size();j++)
+		{
+			cout<<"$$$$$$$$     ###############   assigned = "<<sufficient_tree[i].backtrack[j].first<<" tid- "<<sufficient_tree[i].backtrack[j].second<<endl;
 		}
 	}
 }
@@ -483,18 +526,23 @@ vector<trace_element> Scheduler::extract_trace()
 	vector<int> dfs_stack;
 	map<int,bool> visited;
 	int found_bt = -1;
+	int the_backtrack;
 
 	int current_node = 0;
 	dfs_stack.push_back(0);
 
+	cout<<"EXTRACTING TRACE --- PRINTING CURRENT NODES"<<endl;
+
 	while(!dfs_stack.empty())
 	{
+		cout<<" "<<current_node;
 		current_node = dfs_stack.back();
 		for(int i=0;i<sufficient_tree[current_node].backtrack.size();i++)
 		{
 			if(sufficient_tree[current_node].backtrack[i].first == false)
 			{
 				found_bt = sufficient_tree[current_node].backtrack[i].second;
+				the_backtrack = i;
 				goto beta;
 			}		
 		}
@@ -502,7 +550,7 @@ vector<trace_element> Scheduler::extract_trace()
 		visited[current_node] = true;
 		for(int i=0;i<sufficient_tree[current_node].children.size();i++)
 		{
-			if(visited[sufficient_tree[current_node].children[i].second] == false)
+			if(visited[sufficient_tree[current_node].children[i].second] == false && sufficient_tree[current_node].children[i].second!=-1)
 			{
 				dfs_stack.push_back(sufficient_tree[current_node].children[i].second);
 				goto alpha;
@@ -540,6 +588,9 @@ vector<trace_element> Scheduler::extract_trace()
 				if(TE.backtrack[j].first == false)
 					tre.backtrack.push_back(TE.backtrack[j].second);
 			}
+
+			if(i==dfs_stack.size()-1)
+				sufficient_tree[dfs_stack[i]].backtrack[the_backtrack].first = true;
 
 			tre.sleepset = TE.sleepset;
 			tre.done = TE.done;
@@ -682,6 +733,7 @@ void Scheduler::exec_test_target(const char* path) {
 void Scheduler::run() {
 	struct timeval start_time, end_time;
 	gettimeofday(&start_time, NULL);
+	DONE=false;
 
 	try {
 
@@ -710,7 +762,7 @@ void Scheduler::run() {
 				event_buffer.linChecker->print_check_trace();
 				event_buffer.linChecker->clear();
 			}
-			while (state_stack.has_backtrack_points()
+			while (!DONE //state_stack.has_backtrack_points()
 					&& yices_path_computer_singleton::getInstance()->run_yices_replay
 							== false) {
 				verbose(3, "has backtrack points");
@@ -1212,6 +1264,27 @@ void Scheduler::backtrack_checking() {
 
 	cout << " === run " << run_counter << " ===\n";
 
+	vector<trace_element> trace1 = extract_trace();
+	if(trace1.empty())
+	{
+		DONE = true;
+		run_counter--;
+		return;
+	}
+
+	recreate_statestack(trace1);
+
+	current_state = state_stack.top();
+
+
+		TransitionSet::iterator it;
+		cout<<"\nsleepset of current_node  ===  ";
+		for(it=current_state->sleepset.begin(); it!=current_state->sleepset.end(); it++)
+		{
+			cout<<" "<<it->first; 
+		}
+
+	/*
 	event_buffer.reset();
 
 	thread_table.reset();
@@ -1349,6 +1422,8 @@ void Scheduler::backtrack_checking() {
 	//state->sleepset.remove(event);  // TODO: why remove? Maybe: because we are doing backtrack checking, if we found new backtrack point in follow, next run we should choose the same transition here. So doneset doesn't mean we cannot do it again, it only indicates we ever did it.
 	state_stack.push(current_state);
 
+
+	*/
 	while (current_state->has_executable_transition()) {
 
 		update_backtrack_info(current_state);
@@ -1391,8 +1466,8 @@ void Scheduler::backtrack_checking() {
 	vector<trace_element> trace = create_trace();
 	merge_trace_to_tree(trace);
 
-	vector<trace_element> trace1 = extract_trace();
-	recreate_statestack(trace);
+	//vector<trace_element> trace1 = extract_trace();
+	//recreate_statestack(trace1);
 
 }
 
