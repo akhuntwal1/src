@@ -35,7 +35,14 @@ struct trace_element
   vector<int> done;
 };
 
+struct tree_element
+{
+  vector<pair<int,int> > children;     // pair of thread_id of selected event and the number representing the place of child state in tree vector
 
+  vector<pair<bool,int> > backtrack;   // pair of 'whether assigned or not' and id of thread to be backtracked
+  vector<int> sleepset;
+  vector<int> done;
+};
 
 class Scheduler : public Thread
 {
@@ -110,6 +117,8 @@ public:
 
   vector<trace_element> create_trace();
   void recreate_statestack(vector<trace_element> trace);
+  void merge_trace_to_tree(vector<trace_element> trace);
+  vector<trace_element> extract_trace();
 
 
 public:
@@ -127,6 +136,7 @@ public:
   int run_counter;
   bool found_bug; 
   StateStack state_stack;
+  vector<tree_element> sufficient_tree;
 
   vector<InspectEvent> error_trace;  //RSS
   int exit_status;                   //RSS

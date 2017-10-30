@@ -10,6 +10,11 @@ State * next_state(State* state,
 		   InspectEvent &event, 
 		   EventBuffer &event_buffer);
 
+State * next_state_recreate(State* state, 
+		   InspectEvent &event, 
+		   EventBuffer &event_buffer);
+
+
 void update_pcb_count(State *state);
 #endif
 
