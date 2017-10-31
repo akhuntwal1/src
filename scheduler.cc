@@ -159,7 +159,7 @@ vector<trace_element> Scheduler::create_trace()
 	}
 
 
-
+#ifdef DEBUG
 	cout<<"PRINTING THE CREATED TRACE\n";
 	for(int i=0; i<trace.size();i++)
 	{
@@ -183,6 +183,7 @@ vector<trace_element> Scheduler::create_trace()
 			cout<<trace[i].done[j]<<" ";
 		}
 	}
+#endif
 
 	return trace;
 }
@@ -206,8 +207,6 @@ void Scheduler::recreate_statestack(vector<trace_element> trace)
 	InspectEvent event;
 	TransitionSet::iterator tit;
 	State * init_state, *new_state, *current_state;
-
-	cout<<"\n\nHAS BACKTRACK POINTS = "<<state_stack.has_backtrack_points()<<endl;
 
 	this->exec_test_target(setting.target.c_str());
 
@@ -254,7 +253,7 @@ void Scheduler::recreate_statestack(vector<trace_element> trace)
 
 	}
 
-
+#ifdef DEBUG
 
 	cout<<"\n---------------- PRINTING THE RECREATED STATESTACK -----------------\n";
 	for(int i=0;i<state_stack.depth();i++)
@@ -282,10 +281,9 @@ void Scheduler::recreate_statestack(vector<trace_element> trace)
 		{
 			cout<<it->first<<" ";
 		}
-
-
 	}
-	
+#endif	
+
 }
 
 
@@ -494,7 +492,7 @@ void Scheduler::merge_trace_to_tree(vector<trace_element> trace)
 	}
 
 
-
+#ifdef DEBUG
 	cout<<"\n---------- DISPLAYING THE TREE ------------\n";
 	for(int i=0;i<sufficient_tree.size();i++)
 	{
@@ -509,6 +507,8 @@ void Scheduler::merge_trace_to_tree(vector<trace_element> trace)
 			cout<<"$$$$$$$$     ###############   assigned = "<<sufficient_tree[i].backtrack[j].first<<" tid- "<<sufficient_tree[i].backtrack[j].second<<endl;
 		}
 	}
+#endif
+
 }
 
 
@@ -526,11 +526,15 @@ vector<trace_element> Scheduler::extract_trace()
 	int current_node = 0;
 	dfs_stack.push_back(0);
 
+#ifdef DEBUG
 	cout<<"EXTRACTING TRACE --- PRINTING CURRENT NODES"<<endl;
+#endif
 
 	while(!dfs_stack.empty())
 	{
+#ifdef DEBUG
 		cout<<" "<<current_node;
+#endif
 		current_node = dfs_stack.back();
 		for(int i=0;i<sufficient_tree[current_node].backtrack.size();i++)
 		{
@@ -599,7 +603,7 @@ vector<trace_element> Scheduler::extract_trace()
 		trace.push_back(tre);
 	}
 
-
+#ifdef DEBUG
 	cout<<"PRINTING THE EXTRACTED TRACE\n";
 	for(int i=0; i<trace.size();i++)
 	{
@@ -623,7 +627,7 @@ vector<trace_element> Scheduler::extract_trace()
 			cout<<trace[i].done[j]<<" ";
 		}
 	}
-
+#endif
 
 	return trace;
 }
@@ -727,6 +731,7 @@ void Scheduler::exec_test_target(const char* path) {
 void Scheduler::run() {
 	struct timeval start_time, end_time;
 	gettimeofday(&start_time, NULL);
+	DONE = false;
 
 	try {
 
@@ -755,7 +760,7 @@ void Scheduler::run() {
 				event_buffer.linChecker->print_check_trace();
 				event_buffer.linChecker->clear();
 			}
-			while (state_stack.has_backtrack_points()
+			while (!DONE//state_stack.has_backtrack_points()
 					&& yices_path_computer_singleton::getInstance()->run_yices_replay
 							== false) {
 				verbose(3, "has backtrack points");
@@ -1244,9 +1249,6 @@ void Scheduler::monitor_first_run() {
 	vector<trace_element> trace = create_trace();
 	merge_trace_to_tree(trace);
 
-	vector<trace_element> trace1 = extract_trace();
-	recreate_statestack(trace1);
-
 }
 
 bool Scheduler::examine_state(State * old_state, State * new_state) {
@@ -1254,15 +1256,27 @@ bool Scheduler::examine_state(State * old_state, State * new_state) {
 }
 
 void Scheduler::backtrack_checking() {
+
 	State * state = NULL, *current_state = NULL, *new_state = NULL;
 	InspectEvent event, event2;
 	int depth, i;
 
+	vector<trace_element> trace1 = extract_trace();
+	if(trace1.empty())
+	{
+		DONE = true;
+		state = state_stack.top();
+		while (state != NULL) {
+			state_stack.pop();
+			delete state;
+			state = state_stack.top();
+		}
+		return;
+	}
+
+	recreate_statestack(trace1);
+	
 	cout << " === run " << run_counter << " ===\n";
-
-	event_buffer.reset();
-
-	thread_table.reset();
 
 	state = state_stack.top();
 	while (state != NULL && state->backtrack.empty()) {
@@ -1272,109 +1286,7 @@ void Scheduler::backtrack_checking() {
 	}
 	depth = state_stack.depth();
 
-	this->exec_test_target(setting.target.c_str());
-	event = event_buffer.get_the_first_event();
-	event_buffer.update_output_folders();
-	exec_transition(event);
-
-	for (i = 1; i < depth - 1; i++) {
-		state = state_stack[i];
-		if (state->sel_event.type == THREAD_CREATE) {
-			event = state->sel_event;
-
-			InspectEvent pre, post, first;
-			pre = event_buffer.get_event(event.thread_id);
-			exec_transition(pre);
-			post = event_buffer.get_event(event.thread_id);
-			exec_transition(post);
-			first = event_buffer.get_event(event.child_id);
-			exec_transition(first);
-
-			string thread_nm;
-			thread_table.add_thread(post.child_id, thread_nm, post.thread_arg);
-		} else {
-#ifdef NLZ_COMM
-		    std::vector<InspectEvent> ev_vec = event_buffer.get_events(state->sel_event.thread_id);
-		    for(std::vector<InspectEvent>::iterator vit = ev_vec.begin(); vit != ev_vec.end(); vit++){ 
-			if (state->sel_event == *vit){
-			    break;
-			}
-		    }
-		    if (vit == ev_vec.end()) {
-			assert(state->sel_event.future == 1);
-		    }else{
-			assert (state->sel_event.future == 0 || state->sel_event.future == -1);//atomic
-		    }
-		    exec_transition(state->sel_event);
-#else
-		    event = event_buffer.get_event(state->sel_event.thread_id);
-		    assert(event.valid());
-		    if (event != state->sel_event) {
-			cout << "event:      " << event.toString() << endl;
-			cout << "sel_event:  " << state->sel_event.toString() << endl;
-			assert(event == state->sel_event);
-		    }
-		    exec_transition(event);
-#endif
-		}
-	}
-
-	cout<<"---------arrive at backtrack point--------, depth= "<<depth - 1<<endl;
-	assert(state_stack[depth - 1] == state_stack.top());
-	state = state_stack.top();
-
-
-#ifdef NLZ_EVEC
-	TransitionSet::iterator it;
-	for (it = state->prog_state->enabled.begin();
-			it != state->prog_state->enabled.end(); it++) {
-	    assert (! (it->second.empty()) );
-	    std::vector<InspectEvent>& enabled_vec = it->second;
-	    std::vector<InspectEvent> ev_vec_got = event_buffer.get_events(enabled_vec.front().thread_id);
-	    for(std::vector<InspectEvent>::iterator vit=ev_vec_got.begin(); vit!=ev_vec_got.end(); ++vit){ // for each event received
-		std::vector<InspectEvent>::iterator vit2;
-		for(vit2=enabled_vec.begin(); vit2!=enabled_vec.end(); ++vit2){ // determine if it is in enabled
-		    if (*vit2 == *vit) break;
-		}
-		if(vit2==enabled_vec.end()){
-		    cout<<"==============debug info:\n";
-		    assert(vit2!=enabled_vec.end() && "!!!!!!!! events got is not in enabled!");
-		}
-	    }
-	}
-
-	for (it = state->prog_state->disabled.begin();
-			it != state->prog_state->disabled.end(); it++) {
-	    assert (! (it->second.empty()) );
-	    std::vector<InspectEvent>& disabled_vec = it->second;
-	    std::vector<InspectEvent> ev_vec_got = event_buffer.get_events(disabled_vec.front().thread_id);
-	    for(std::vector<InspectEvent>::iterator vit=ev_vec_got.begin(); vit!=ev_vec_got.end(); ++vit){ // for each event received
-		std::vector<InspectEvent>::iterator vit2;
-		for(vit2=disabled_vec.begin(); vit2!=disabled_vec.end(); ++vit2){ // determine if it is in disabled
-		    if (*vit2 == *vit) break;
-		}
-		if(vit2==disabled_vec.end()){
-		    cout<<"!!!!!!!! events got is not in disabled!"<<endl;
-		    abort();
-		}
-	    }
-	}
-#else
-	TransitionSet::iterator it;
-	for (it = state->prog_state->enabled.begin();
-			it != state->prog_state->enabled.end(); it++) {
-		event = it->second;
-		event2 = event_buffer.get_event(event.thread_id);
-		assert(event == event2);
-	}
-
-	for (it = state->prog_state->disabled.begin();
-			it != state->prog_state->disabled.end(); it++) {
-		event = it->second;
-		event2 = event_buffer.get_event(event.thread_id);
-		assert(event == event2);
-	}
-#endif
+	
 
 #ifdef NLZ_EVEC
 	event = state->backtrack.get_front_transition(); 
@@ -1389,13 +1301,7 @@ void Scheduler::backtrack_checking() {
 	}
 	state->backtrack.remove(event);
 
-	//cout<<"\n       SLEEPSET -- ";
-	//for(it=state->sleepset.begin();it!=state->sleepset.end();it++)
-	//{
-	//	cout<<it->first<<" ";
-	//}
 
-	cout<<endl;
 	current_state = next_state(state, event, event_buffer);
 	this->check_property(state);
 
@@ -1412,14 +1318,7 @@ void Scheduler::backtrack_checking() {
 			event = current_state->get_transition_no_spin();
 		else
 			event = current_state->get_transition();
-	
-		//cout<<"\n----------SLEEPSET -- ";
-		/*for(it=state->sleepset.begin();it!=state->sleepset.end();it++)
-		{
-			cout<<it->first<<" ";
-			for(int i=0; i<it->second.size(); i++)
-				cout<<it->second[i].toString()<<endl;
-		}*/
+
 		new_state = next_state(current_state, event, event_buffer);
 		this->check_property(current_state);
 
@@ -1452,9 +1351,6 @@ void Scheduler::backtrack_checking() {
 
 	vector<trace_element> trace = create_trace();
 	merge_trace_to_tree(trace);
-
-	vector<trace_element> trace1 = extract_trace();
-	recreate_statestack(trace1);
 
 }
 

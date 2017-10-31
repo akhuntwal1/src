@@ -137,6 +137,7 @@ public:
   bool found_bug; 
   StateStack state_stack;
   vector<tree_element> sufficient_tree;
+  bool DONE;
 
   vector<InspectEvent> error_trace;  //RSS
   int exit_status;                   //RSS
