@@ -831,6 +831,7 @@ void Scheduler::run() {
 
 				//cout << state_stack.toString();
 			}
+			run_counter--;
 		}
 
 	} catch (AssertException & e) {
