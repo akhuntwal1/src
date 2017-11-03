@@ -518,6 +518,13 @@ vector<trace_element> Scheduler::extract_trace()
 	//do DFS of sufficient tree to find out a node with <false, some_int> in backtrack
 	vector<trace_element> trace;
 
+	if(!extracted_traces.empty())
+	{
+		trace = extracted_traces[0];
+		extracted_traces.erase(extracted_traces.begin());
+		return trace;
+	}
+
 	vector<int> dfs_stack;
 	map<int,bool> visited;
 	int found_bt = -1;
@@ -553,6 +560,7 @@ vector<trace_element> Scheduler::extract_trace()
 			{
 				dfs_stack.push_back(sufficient_tree[current_node].children[i].second);
 				goto alpha;
+				gamma: ;
 			}
 		}
 		dfs_stack.pop_back();
@@ -601,6 +609,12 @@ vector<trace_element> Scheduler::extract_trace()
 		tre.thread_id = -1;
 
 		trace.push_back(tre);
+
+		extracted_traces.push_back(trace);
+		trace.clear();
+		found_bt = -1;
+		goto gamma;
+
 	}
 
 #ifdef DEBUG
@@ -628,6 +642,16 @@ vector<trace_element> Scheduler::extract_trace()
 		}
 	}
 #endif
+
+	if(extracted_traces.empty())
+	{
+		trace.clear();
+	}
+	else
+	{
+		trace = extracted_traces[0];
+		extracted_traces.erase(extracted_traces.begin());
+	}
 
 	return trace;
 }

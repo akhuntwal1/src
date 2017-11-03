@@ -120,6 +120,8 @@ public:
   void merge_trace_to_tree(vector<trace_element> trace);
   vector<trace_element> extract_trace();
 
+  vector<vector<trace_element> > extracted_traces;
+
 
 public:
   EventBuffer event_buffer;
