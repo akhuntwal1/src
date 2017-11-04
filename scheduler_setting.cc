@@ -1,6 +1,7 @@
 #include "scheduler_setting.hh"
 #include <cstdlib>
 
+
 SchedulerSetting  setting;
 
 
@@ -46,9 +47,29 @@ SchedulerSetting::SchedulerSetting()
   target = "";
   target_argc = -1;
   target_argv = NULL;
-  socket_file = string("/tmp/_") + string(getenv("USER")) + "_inspect_socket";
+  //socket_file = string("/tmp/_") + string(getenv("USER")) + "_inspect_socket";
+
+  for(int i = 0; i < MAX_PROCESSES; i++)
+  {
+    socket_file[i] = string("/tmp/_") + string(getenv("USER")) + "_inspect_socket" + get_str(i);
+  }
 }
 
+
+string SchedulerSetting::get_str(int i)
+{
+  string ans = "";
+  char ch = 'a';
+  if(i == 0) return "0";
+  while(i != 0)
+  {
+    int r = i%10;
+    ch = (char) (r+48);
+    ans = ch + ans;
+    i /= 10;
+  }
+  return ans;
+}
 
 void set_stateful_flag()
 {

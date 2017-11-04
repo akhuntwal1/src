@@ -10,6 +10,7 @@
 #include "yices_path_computer_singleton.hh"
 #include "inspect_ucg_graph.hh"
 #include "lin_checker.hh"
+#include <mpi.h>
 
 using namespace std;
 
@@ -289,15 +290,13 @@ void print_time(struct timeval * start_time, struct timeval * end_time) {
 }
 SchedulerSetting setting1;
 int main(int argc, char* argv[]) {
-//
-//  PolyGraph a;
-//  a.test();
 
-//	while(1){
-//	int a;
-//	cin >> a;
-//	cout<<"a:" <<a<<endl;
-//	}
+	//**************************************************
+	int rank,total_procs;
+	MPI_Init(&argc, &argv);
+ 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  	MPI_Comm_size(MPI_COMM_WORLD, &total_procs);
+	//**************************************************
 
 	bool success_flag;
 //	SchedulerSetting setting;
@@ -313,16 +312,27 @@ int main(int argc, char* argv[]) {
 	}
 
 	g_scheduler = new Scheduler();
-	g_scheduler->init();
 
-	gettimeofday(&start_time, NULL);
-	g_scheduler->run();
-	cout << "@@@CLAP: Done!" << endl; 
-	gettimeofday(&end_time, NULL);
+	if(rank!=0 || total_procs==1)
+	{
+		g_scheduler->init(rank);
+		gettimeofday(&start_time, NULL);
+	}
 
-	print_time(&start_time, &end_time);
+	if(total_procs==1)
+		g_scheduler->run();
+	else
+		g_scheduler->run_parallel();
+
+	if(rank==0)
+	{
+		cout << "@@@CLAP: Done!" << endl; 
+		gettimeofday(&end_time, NULL);
+		print_time(&start_time, &end_time);
+	}
 
 	delete g_scheduler;
+	MPI_Finalize();
 	return 0;
 }
 

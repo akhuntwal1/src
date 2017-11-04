@@ -685,11 +685,11 @@ Scheduler::~Scheduler() {
  *  set up the server socket for listening 
  * 
  */
-bool Scheduler::init() {
+bool Scheduler::init(int rank) {
 	int retval;
 	char buf[64];
 
-	setenv("INSPECT_SOCKET_FILE", setting.socket_file.c_str(), 1);
+	setenv("INSPECT_SOCKET_FILE", setting.socket_file[rank].c_str(), 1);
 
 	memset(buf, 0, sizeof(buf));
 	sprintf(buf, "%d", setting.timeout_val);
@@ -705,7 +705,7 @@ bool Scheduler::init() {
 
 	max_errors = setting.max_errors;
 
-	retval = event_buffer.init(setting.socket_file, setting.timeout_val,
+	retval = event_buffer.init(setting.socket_file[rank], setting.timeout_val,
 			setting.max_threads);
 
 	assert(retval);
@@ -753,6 +753,7 @@ void Scheduler::exec_test_target(const char* path) {
 }
 
 void Scheduler::run() {
+
 	struct timeval start_time, end_time;
 	gettimeofday(&start_time, NULL);
 	DONE = false;
@@ -763,8 +764,7 @@ void Scheduler::run() {
 
 			this->free_run();
 		} else {
-			//RUN # 1
-			this->monitor_first_run();
+				this->monitor_first_run();
 
 #ifdef NLZ_EVEC
 #else
@@ -925,6 +925,146 @@ void Scheduler::run() {
 	}
 
 }
+
+
+void Scheduler::run_parallel()
+{
+	int rank, total_procs;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  	MPI_Comm_size(MPI_COMM_WORLD, &total_procs);
+
+  	struct timeval start_time, end_time;
+	gettimeofday(&start_time, NULL);
+	DONE = false;
+
+	try
+	{
+		if(rank==0)
+		{
+			this->monitor_first_run();
+
+			bool busy=false;
+			vector<trace_element> trace = extract_trace();
+
+			while(!trace.empty())
+			{
+				MPI.Recv(1,"i want trace ");
+
+				MPI.send(2,trace);
+
+				trace = MPI.Recv(3,stack_info);
+				merge_trace_to_tree(trace);
+
+				trace = extract_trace();
+			}
+
+			MPI.send(1, "Ho gaya kaam");
+			return;
+		}
+		else
+		{
+			MPI.Send(1,"I want trace");
+
+			MPI.Recv(2,trace);
+			if(trace = "ho gaya kaam")
+				return;
+
+			trace = this->backtrack_checking(trace);
+
+			MPI.Send(trace);
+
+		}
+
+	} catch (AssertException & e) {
+		cout << endl;
+		cout << "=================================" << endl;
+		cout << "@@@CLAP: Caught AssertException" << endl;
+		if (verboseLevel >= 1) {
+			cout << state_stack.top()->toString() << endl;
+		}
+		kill(sut_pid, SIGTERM);
+		sut_pid = -1;
+		exit_status = -1;
+	} catch (DeadlockException & e) {
+		cout << endl;
+		cout << "========== ========================" << endl;
+		cout << "@@@CLAP: Caught DeadlockException" << endl;
+		if (verboseLevel >= 1) {
+			cout << state_stack.top()->toString() << endl;
+		}
+		kill(sut_pid, SIGTERM);
+		sut_pid = -1;
+		exit_status = -1;
+	} catch (DataraceException & e) {
+		cout << endl;
+		cout << "===================================" << endl;
+		cout << "@@@CLAP: Caught DataraceException (" << e.detail << ")" << endl;
+		if (verboseLevel >= 1) {
+			cout << state_stack.top()->toString() << endl;
+		}
+		kill(sut_pid, SIGTERM);
+		sut_pid = -1;
+		exit_status = -1;
+	} catch (IllegalLockException & e) {
+		cout << endl;
+		cout << "===================================" << endl;
+		cout << "@@@CLAP: Caught IllegalLockException (" << e.detail << ")" << endl;
+		if (verboseLevel >= 1) {
+			cout << state_stack.top()->toString() << endl;
+		}
+		kill(sut_pid, SIGTERM);
+		sut_pid = -1;
+		exit_status = -1;
+	} catch (SocketException & e) {
+		cout << endl;
+		cout << "===================================" << endl;
+		cout << "@@@CLAP: Caught SocketException (" << e.detail << ")" << endl;
+		cout << "could be a target failure (e.g., segfault)" << endl;
+		if (verboseLevel >= 1) {
+			cout << state_stack.top()->toString() << endl;
+		}
+		kill(sut_pid, SIGTERM);
+		sut_pid = -1;
+		exit_status = -1;
+	} catch (ThreadException & e) {
+		cout << endl;
+		cout << "===================================" << endl;
+		cout << "Caught ThreadException" << endl;
+		if (verboseLevel >= 1) {
+			cout << state_stack.top()->toString() << endl;
+		}
+		kill(sut_pid, SIGTERM);
+		sut_pid = -1;
+		exit_status = -1;
+	} catch (NullObjectException & e) {
+		cout << endl;
+		cout << "===================================" << endl;
+		cout << "@@@CLAP: Caught NullObjectException" << endl;
+		if (verboseLevel >= 1) {
+			cout << state_stack.top()->toString() << endl;
+		}
+		kill(sut_pid, SIGTERM);
+		sut_pid = -1;
+		exit_status = -1;
+	}
+
+	if (verboseLevel >= -1) {
+		cout << endl;
+		cout << "===================================" << endl;
+		cout << "Total number of runs:  " << run_counter
+				<< ",   sleepset killed runs: " << num_killed << endl;
+		cout << "Transitions explored: " << num_of_transitions << endl;
+
+		if (config_lin_check_flag) {
+
+			cout << "total_check  : " << total_check << endl;
+			cout << "total_lin    : " << total_lin << endl;
+			cout << "total_not_lin: " << total_not_lin << endl;
+
+		}
+	}
+}
+
 
 void Scheduler::exec_transition(InspectEvent & event) {
 	event_buffer.approve(event);

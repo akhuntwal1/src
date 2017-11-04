@@ -57,7 +57,8 @@ public:
   InspectEvent receive_main_start();
   void approve_event(InspectEvent &event);
 
-  void run(); 
+  void run();
+  void run_parallel(); 
   void stop();
   
   inline bool is_listening_socket(int fd); 

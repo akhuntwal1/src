@@ -1,6 +1,8 @@
 #ifndef __INSPECT_SCHEDULER__SETTING_HH__
 #define __INSPECT_SCHEDULER__SETTING_HH__
 
+#define MAX_PROCESSES 32
+
 #include "naling.def"
 #ifdef NLZ_FLAG
 #include "memory_model_enum.hh"
@@ -14,6 +16,7 @@ class SchedulerSetting
 {
 public:
   SchedulerSetting();
+  string SchedulerSetting::get_str(int i);
 
 public:
   bool standalone_flag;
@@ -54,7 +57,8 @@ public:
   int  max_threads;
   int  max_errors;
   int  timeout_val;
-  string  socket_file;
+ // string  socket_file;
+  string socket_file[MAX_PROCESSES];
 
   string  target;
   int target_argc;
