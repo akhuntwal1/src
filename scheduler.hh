@@ -18,6 +18,7 @@
 #include "thread_info.hh"
 #include "scheduler_setting.hh"
 #include "event_relation_graph.hh"
+#include <boost/mpi.hpp>
 
 
 using std::vector;
@@ -27,13 +28,38 @@ using std::pair;
 using __gnu_cxx::hash_map;
 using __gnu_cxx::hash;
 
-struct trace_element
+/*struct trace_element
 {
   int thread_id;
   vector<int> backtrack;
   vector<int> sleepset;
   vector<int> done;
 };
+*/
+
+namespace mpi = boost::mpi;
+ 
+class trace_element
+{
+private:
+ friend class boost::serialization::access;
+ 
+template<class Archive>
+ void serialize(Archive &ar, const unsigned int version)
+ {
+   ar & thread_id;
+   ar & backtrack;
+   ar & sleepset;
+   ar & done;
+ }
+ 
+public:
+  int thread_id;
+  vector<int> backtrack;
+  vector<int> sleepset;
+  vector<int> done;
+};
+
 
 struct tree_element
 {
@@ -50,7 +76,7 @@ public:
   Scheduler();
   ~Scheduler();
 
-  bool init();
+  bool init(int rank);
   void read_replay_file();
 
   InspectEvent receive_event( Socket * socket ); 
@@ -58,7 +84,7 @@ public:
   void approve_event(InspectEvent &event);
 
   void run();
-  void run_parallel(); 
+  void run_parallel(mpi::communicator world); 
   void stop();
   
   inline bool is_listening_socket(int fd); 
@@ -99,7 +125,7 @@ public:
   void free_run();
   void monitor_first_run();
   void yices_run();
-  void backtrack_checking();
+  vector<trace_element> backtrack_checking(vector<trace_element> trace);
 //   void monitor();
   State * execute_one_thread_until(State * state, int tid, InspectEvent);
   //State * next_state(State *state, InspectEvent &event, LocalStateTable * ls_table);

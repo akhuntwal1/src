@@ -10,9 +10,10 @@
 #include "yices_path_computer_singleton.hh"
 #include "inspect_ucg_graph.hh"
 #include "lin_checker.hh"
-#include <mpi.h>
+#include <boost/mpi.hpp>
 
 using namespace std;
+namespace mpi = boost::mpi;
 
 Scheduler * g_scheduler = NULL;
 int verboseLevel = -1;
@@ -292,10 +293,9 @@ SchedulerSetting setting1;
 int main(int argc, char* argv[]) {
 
 	//**************************************************
-	int rank,total_procs;
-	MPI_Init(&argc, &argv);
- 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  	MPI_Comm_size(MPI_COMM_WORLD, &total_procs);
+	mpi::environment env;
+  	mpi::communicator world;
+
 	//**************************************************
 
 	bool success_flag;
@@ -313,18 +313,16 @@ int main(int argc, char* argv[]) {
 
 	g_scheduler = new Scheduler();
 
-	if(rank!=0 || total_procs==1)
+	if(world.rank()!=0)
 	{
-		g_scheduler->init(rank);
+		g_scheduler->init(world.rank());
 		gettimeofday(&start_time, NULL);
 	}
 
-	if(total_procs==1)
-		g_scheduler->run();
-	else
-		g_scheduler->run_parallel();
 
-	if(rank==0)
+	g_scheduler->run_parallel(world);
+
+	if(world.rank()==0)
 	{
 		cout << "@@@CLAP: Done!" << endl; 
 		gettimeofday(&end_time, NULL);
@@ -332,7 +330,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	delete g_scheduler;
-	MPI_Finalize();
 	return 0;
 }
 

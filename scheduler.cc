@@ -822,7 +822,7 @@ void Scheduler::run() {
 				 }
 				 */
 
-				this->backtrack_checking(); //RUN # 2,3,4,...
+				//this->backtrack_checking(); //RUN # 2,3,4,...
 				if (config_lin_check_flag
 						&& (!config_lin_serial_flag || quasi_flag)) {
 					event_buffer.linChecker->print_check_trace();
@@ -927,11 +927,12 @@ void Scheduler::run() {
 }
 
 
-void Scheduler::run_parallel()
+void Scheduler::run_parallel(mpi::communicator world)
 {
 	int rank, total_procs;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  	MPI_Comm_size(MPI_COMM_WORLD, &total_procs);
+
+	rank = world.rank();
+	total_procs = world.size();
 
   	struct timeval start_time, end_time;
 	gettimeofday(&start_time, NULL);
@@ -942,39 +943,45 @@ void Scheduler::run_parallel()
 		if(rank==0)
 		{
 			this->monitor_first_run();
+			vector<trace_element> trace1;
 
-			bool busy=false;
 			vector<trace_element> trace = extract_trace();
 
 			while(!trace.empty())
 			{
-				MPI.Recv(1,"i want trace ");
+				bool i_want_trace;
+				world.recv(1, 0, i_want_trace);
 
-				MPI.send(2,trace);
-
-				trace = MPI.Recv(3,stack_info);
-				merge_trace_to_tree(trace);
+				world.send(1, 1, trace);
 
 				trace = extract_trace();
+
+				world.recv(1, 2, trace1);
+				merge_trace_to_tree(trace1);
+
+				if(trace.empty())
+					trace = extract_trace();
 			}
 
-			MPI.send(1, "Ho gaya kaam");
+			world.send(1, 1, trace);
 			return;
 		}
 		else
 		{
-			MPI.Send(1,"I want trace");
+			vector<trace_element> trace1, trace;
+			while(1)
+			{
+				world.send(0, 0, true);
 
-			MPI.Recv(2,trace);
-			if(trace = "ho gaya kaam")
-				return;
+				world.recv(0, 1, trace);
+				if(trace.empty())
+					return;
 
-			trace = this->backtrack_checking(trace);
+				trace1 = this->backtrack_checking(trace);
 
-			MPI.Send(trace);
-
+				world.send(0, 2, trace1);
+			}
 		}
-
 	} catch (AssertException & e) {
 		cout << endl;
 		cout << "=================================" << endl;
@@ -1420,13 +1427,13 @@ bool Scheduler::examine_state(State * old_state, State * new_state) {
 	return false;
 }
 
-void Scheduler::backtrack_checking() {
+vector<trace_element> Scheduler::backtrack_checking(vector<trace_element> trace1) {
 
 	State * state = NULL, *current_state = NULL, *new_state = NULL;
 	InspectEvent event, event2;
 	int depth, i;
 
-	vector<trace_element> trace1 = extract_trace();
+	//vector<trace_element> trace1 = extract_trace();
 	if(trace1.empty())
 	{
 		DONE = true;
@@ -1515,7 +1522,8 @@ void Scheduler::backtrack_checking() {
 	}
 
 	vector<trace_element> trace = create_trace();
-	merge_trace_to_tree(trace);
+	return trace;
+	//merge_trace_to_tree(trace);
 
 }
 

@@ -1,10 +1,11 @@
-CC  = gcc
-CXX = g++
+CC  = mpicc 
+CXX = mpic++
 
 YICES_PATH = $(shell cd ../../yices-1.0.28; pwd)
 SMTDP_PATH = $(shell cd ../../smt_dp ; pwd)
+BOOST_PATH = /usr/local/lib
 
-AC_FLAGS = -DRSS_EXTENSION=1 -I$(YICES_PATH)/include -I$(SMTDP_PATH)
+AC_FLAGS = -DRSS_EXTENSION=1 -I$(YICES_PATH)/include -I$(SMTDP_PATH) -I$(BOOST_PATH)
 
 LD_FLAGS_YICES1 = -Wl,-rpath,$(YICES_PATH)/lib
 LD_FLAGS_YICES2 = -Wl,-rpath-link,$(YICES_PATH)/lib
@@ -16,9 +17,14 @@ LD_FLAGS_SMTDP2 = -Wl,-rpath-link,$(SMTDP_PATH)/lib
 LD_FLAGS_SMTDP3 = -Wl,-L,$(SMTDP_PATH)/lib
 LD_FLAGS_SMTDP = $(LD_FLAGS_SMTDP1) $(LD_FLAGS_SMTDP2) $(LD_FLAGS_SMTDP3) -lsmtdp
 
-LD_FLAGS = $(LD_FLAGS_SMTDP) $(LD_FLAGS_YICES)
+LD_FLAGS_BOOST1 = -Wl,-rpath,$(BOOST_PATH)
+LD_FLAGS_BOOST2 = -Wl,-rpath-link,$(BOOST_PATH)
+LD_FLAGS_BOOST3 = -Wl,-L,$(BOOST_PATH)
+LD_FLAGS_BOOST = $(LD_FLAGS_BOOST1) $(LD_FLAGS_BOOST2) $(LD_FLAGS_BOOST3) -lboost_mpi -lboost_serialization
 
-CCFLAGS =  -Wall  -g  -pthread -D__USE_XOPEN2K -fpermissive -Wunused-variable -Wno-deprecated $(AC_FLAGS)
+LD_FLAGS = $(LD_FLAGS_SMTDP) $(LD_FLAGS_YICES) $(LD_FLAGS_BOOST)
+
+CCFLAGS = -g -pthread -D__USE_XOPEN2K -fpermissive -Wunused-variable -Wno-deprecated $(AC_FLAGS)
 
 LIB_SRC_NAME  =  inspect_util   inspect_pthread   \
                  inspect_event  object_table      \
