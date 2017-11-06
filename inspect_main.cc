@@ -11,6 +11,7 @@
 #include "inspect_ucg_graph.hh"
 #include "lin_checker.hh"
 #include <boost/mpi.hpp>
+#include <mpi.h>
 
 using namespace std;
 namespace mpi = boost::mpi;
@@ -294,7 +295,9 @@ SchedulerSetting setting1;
 int main(int argc, char* argv[]) {
 
 	//**************************************************
-	mpi::environment env;
+
+	//mpi::environment env;
+	MPI_Init(&argc, &argv);
   	mpi::communicator world;
 
 	//**************************************************
@@ -328,6 +331,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	delete g_scheduler;
+	MPI_Finalize();
 	return 0;
 }
 

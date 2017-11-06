@@ -943,9 +943,6 @@ void Scheduler::run_parallel(mpi::communicator world)
 		if(rank==0)
 		{
 			this->monitor_first_run();
-
-			cout<<"yes4\n";
-
 			vector<trace_element> trace1;
 
 			vector<trace_element> trace = extract_trace();
@@ -954,7 +951,8 @@ void Scheduler::run_parallel(mpi::communicator world)
 			{
 				bool i_want_trace;
 
-				cout<<"yes5\n";
+				run_counter++;
+
 				world.recv(1, 0, i_want_trace);
 
 				world.send(1, 1, trace);
@@ -969,6 +967,10 @@ void Scheduler::run_parallel(mpi::communicator world)
 			}
 
 			world.send(1, 1, trace);
+
+			cout << endl;
+			cout << "===================================" << endl;
+			cout << "Total number of runs:  " << run_counter<<endl;
 			return;
 		}
 		else
@@ -1060,21 +1062,6 @@ void Scheduler::run_parallel(mpi::communicator world)
 		exit_status = -1;
 	}
 
-	if (verboseLevel >= -1) {
-		cout << endl;
-		cout << "===================================" << endl;
-		cout << "Total number of runs:  " << run_counter
-				<< ",   sleepset killed runs: " << num_killed << endl;
-		cout << "Transitions explored: " << num_of_transitions << endl;
-
-		if (config_lin_check_flag) {
-
-			cout << "total_check  : " << total_check << endl;
-			cout << "total_lin    : " << total_lin << endl;
-			cout << "total_not_lin: " << total_not_lin << endl;
-
-		}
-	}
 }
 
 
@@ -1327,11 +1314,7 @@ void Scheduler::monitor_first_run() {
 
 	cout << " === run " << run_counter << " ===\n";
 
-	cout<<"yes0\n";
-
 	this->exec_test_target(setting.target.c_str());
-
-	cout<<"yes1\n";
 
 	init_state = this->get_initial_state();
 
@@ -1427,10 +1410,9 @@ void Scheduler::monitor_first_run() {
 	}
 	verbose(4,state_stack.toString());
 
-	cout<<"yes2\n";
 	vector<trace_element> trace = create_trace();
 	merge_trace_to_tree(trace);
-	cout<<"yes3\n";
+
 }
 
 bool Scheduler::examine_state(State * old_state, State * new_state) {
