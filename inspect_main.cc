@@ -272,6 +272,7 @@ bool parsing_command_line(int argc, char* argv[]) {
 	setting.target_argc = argc - pos;
 	setting.target_argv = &argv[pos];
 	setting.target = argv[pos];
+
 	return true;
 }
 
@@ -313,12 +314,9 @@ int main(int argc, char* argv[]) {
 
 	g_scheduler = new Scheduler();
 
-	if(world.rank()!=0)
-	{
-		g_scheduler->init(world.rank());
-		gettimeofday(&start_time, NULL);
-	}
+	gettimeofday(&start_time, NULL);
 
+	g_scheduler->init(world.rank());
 
 	g_scheduler->run_parallel(world);
 
