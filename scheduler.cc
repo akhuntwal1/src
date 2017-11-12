@@ -936,37 +936,109 @@ void Scheduler::run_parallel(mpi::communicator world)
 
   	struct timeval start_time, end_time;
 	gettimeofday(&start_time, NULL);
-	DONE = false;
 
 	try
 	{
 		if(rank==0)
 		{
+			vector<trace_element> trace, trace1, trace2;
+
+			vector < vector<trace_element> > trace_buffer;
+			vector< vector<trace_element> > btrace(total_procs, trace);
+
+			vector <bool> idle_procs(total_procs, true);
+			mpi::request req2;
+
+			vector<mpi::request> req1;
+
+			bool some_proc_busy = false;
+			int sends_in_buffer = 0;
+			bool no_recv_in_buffer = true;
+
 			this->monitor_first_run();
-			vector<trace_element> trace1;
+			trace = extract_trace();
+			if(!trace.empty())
+				trace_buffer.push_back(trace);
 
-			vector<trace_element> trace = extract_trace();
 
-			while(!trace.empty())
+			while(!trace_buffer.empty() || some_proc_busy)
 			{
-				bool i_want_trace;
+				//send work to idle procs
+				if(sends_in_buffer<total_procs-1 && !trace_buffer.empty())
+				{
+					for(int j=1; j<total_procs*2; j++)
+					{
+						int i = ( rand()%(total_procs-1) ) + 1;
+						if(idle_procs[i]=true && !trace_buffer.empty())
+						{
+							btrace[i] = trace_buffer[0];
+							trace_buffer.erase(trace_buffer.begin());
 
-				run_counter++;
+							req1.push_back(world.isend(i, 1, btrace[i]));
+							sends_in_buffer++;
+							idle_procs[i] = false;
+							run_counter++;
+						}
+					}
+				}
+				if(sends_in_buffer > 0)
+				{
+					for(int i=0; i<req1.size(); i++)
+					{
+						if(req1[i].test())
+						{
+							sends_in_buffer--;
+							req1.erase(req1.begin()+i);
+							i--;
+						}
+					}
+				}
 
-				world.recv(1, 0, i_want_trace);
+				//receive work from procs and mark them idle (Since procs send results only when there part is complete)
+				if(no_recv_in_buffer)
+				{
+					req2 = world.irecv(mpi::any_source, 2, trace1);
+					no_recv_in_buffer = false;
+				}
+				else
+				{
+					if(boost::optional<boost::mpi::status> stat2 = req2.test())
+					{
+						//cout<<"\n-----------RECEIVED RESULT FROM THIS PROCESS -- "<<(*stat2).source()<<endl;
+						idle_procs[(*stat2).source()] = true;
+						merge_trace_to_tree(trace1);
+						no_recv_in_buffer = true;
+					}
+				}
 
-				world.send(1, 1, trace);
+				if(trace_buffer.size()<10)
+				{
+					trace2 = extract_trace();
+					if(!trace2.empty())
+						trace_buffer.push_back(trace2);
+				}
 
-				trace = extract_trace();
+				for(int i=1; i<total_procs; i++)
+				{
+					if(idle_procs[i] == false)
+					{
+						some_proc_busy = true;
+						goto yazidi;
+					}
+				}
 
-				world.recv(1, 2, trace1);
-				merge_trace_to_tree(trace1);
+				some_proc_busy = false;
+				//cout<<"SOME PROC BUSY = "<<some_proc_busy<<endl;
+				//cout<<"TRACE IS EMPTY = "<<trace.empty();
 
-				if(trace.empty())
-					trace = extract_trace();
+				yazidi: ;
 			}
 
-			world.send(1, 1, trace);
+			assert(trace_buffer.empty());
+			trace.clear();
+			//send quit to all procs
+			for(int i=1;i<total_procs;i++)
+				world.send(i, 1, trace);
 
 			cout << endl;
 			cout << "===================================" << endl;
@@ -978,15 +1050,18 @@ void Scheduler::run_parallel(mpi::communicator world)
 			vector<trace_element> trace1, trace;
 			while(1)
 			{
-				world.send(0, 0, true);
-
+			//	cout<<"WAITING TO RECV WORK"<<endl;
 				world.recv(0, 1, trace);
+			//	cout<<"RECEIVED WORK FROM MASTER"<<endl;
+
 				if(trace.empty())
 					return;
 
 				trace1 = this->backtrack_checking(trace);
 
+			//	cout<<"WORK DONE. ABOUT TO SEND RESULTS TO MASTER"<<endl;
 				world.send(0, 2, trace1);
+			//	cout<<"SENT RESULTS TO MASTER"<<endl;
 			}
 		}
 	} catch (AssertException & e) {
