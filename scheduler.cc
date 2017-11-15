@@ -403,7 +403,11 @@ void Scheduler::merge_trace_to_tree(vector<trace_element> trace)
 					pair<int,int> temp;
 
 					temp.first = trace[i].thread_id;
-					temp.second = sufficient_tree.size();   //we'll push the new child node at end of sufficient tree vector
+
+					if( i==trace.size()-1)
+						temp.second = -1;
+					else
+						temp.second = sufficient_tree.size();   //we'll push the new child node at end of sufficient tree vector
 
 					sufficient_tree[current_node].children.push_back(temp);
 
@@ -969,7 +973,7 @@ void Scheduler::run_parallel(mpi::communicator world)
 					for(int j=1; j<total_procs*2; j++)
 					{
 						int i = ( rand()%(total_procs-1) ) + 1;
-						if(idle_procs[i]=true && !trace_buffer.empty())
+						if(idle_procs[i]==true && !trace_buffer.empty())
 						{
 							btrace[i] = trace_buffer[0];
 							trace_buffer.erase(trace_buffer.begin());
@@ -977,7 +981,7 @@ void Scheduler::run_parallel(mpi::communicator world)
 							req1.push_back(world.isend(i, 1, btrace[i]));
 							sends_in_buffer++;
 							idle_procs[i] = false;
-							run_counter++;
+							//run_counter++;
 						}
 					}
 				}
@@ -1036,13 +1040,17 @@ void Scheduler::run_parallel(mpi::communicator world)
 
 			assert(trace_buffer.empty());
 			trace.clear();
+
+			cout<<"\nprocess 1 is idle = "<<idle_procs[1];
+			cout<<"\nSome proc busy = "<<some_proc_busy; 
+
 			//send quit to all procs
 			for(int i=1;i<total_procs;i++)
 				world.send(i, 1, trace);
 
 			cout << endl;
 			cout << "===================================" << endl;
-			cout << "Total number of runs:  " << run_counter<<endl;
+			//cout << "Total number of runs:  " << run_counter<<endl;
 			return;
 		}
 		else
@@ -1496,101 +1504,245 @@ bool Scheduler::examine_state(State * old_state, State * new_state) {
 
 vector<trace_element> Scheduler::backtrack_checking(vector<trace_element> trace1) {
 
-	State * state = NULL, *current_state = NULL, *new_state = NULL;
+State * state = NULL, *current_state = NULL, *new_state = NULL;
 	InspectEvent event, event2;
 	int depth, i;
 
-	//vector<trace_element> trace1 = extract_trace();
-	if(trace1.empty())
+	int runs_when_started = run_counter;
+
+	int final_depth;
+
+	bool first_entry = true;
+
+	while(1)
 	{
-		DONE = true;
-		state = state_stack.top();
-		while (state != NULL) {
-			state_stack.pop();
-			delete state;
+		if(first_entry)
+		{
+
+			//vector<trace_element> trace1 = extract_trace();
+			if(trace1.empty())
+			{
+				DONE = true;
+				state = state_stack.top();
+				while (state != NULL) {
+					state_stack.pop();
+					delete state;
+					state = state_stack.top();
+				}
+				//cout << "Total number of runs:  " << run_counter<<endl;
+				return;
+			}
+
+			run_counter++;
+
+			recreate_statestack(trace1);
+			
+			cout << " === run " << run_counter << " ===\n";
+
 			state = state_stack.top();
+			while (state != NULL && state->backtrack.empty()) {
+				state_stack.pop();
+				delete state;
+				state = state_stack.top();
+			}
+			depth = state_stack.depth();
+
+			final_depth = depth;
+			first_entry = false;
 		}
-		return;
-	}
-
-	recreate_statestack(trace1);
-	
-	cout << " === run " << run_counter << " ===\n";
-
-	state = state_stack.top();
-	while (state != NULL && state->backtrack.empty()) {
-		state_stack.pop();
-		delete state;
-		state = state_stack.top();
-	}
-	depth = state_stack.depth();
-
-	
-
-#ifdef NLZ_EVEC
-	event = state->backtrack.get_front_transition(); 
-	
-#else
-	event = state->backtrack.get_transition();//6.5 here it cause a bug when sel-ev is write and buffer is full, permit event is read, then it reply the same thing and not stop.
-#endif
-
-	if (!event.valid()) {
-		cout << event.toString() << endl;
-		assert(event.valid());
-	}
-	state->backtrack.remove(event);
-
-
-	current_state = next_state(state, event, event_buffer);
-	this->check_property(state);
-
-
-	num_of_transitions++;
-	//state->sleepset.remove(event);  // TODO: why remove? Maybe: because we are doing backtrack checking, if we found new backtrack point in follow, next run we should choose the same transition here. So doneset doesn't mean we cannot do it again, it only indicates we ever did it.
-	state_stack.push(current_state);
-
-	while (current_state->has_executable_transition()) {
-
-		update_backtrack_info(current_state);
-
-		if (setting.max_spins != -1)
-			event = current_state->get_transition_no_spin();
 		else
-			event = current_state->get_transition();
+		{
 
-		new_state = next_state(current_state, event, event_buffer);
-		this->check_property(current_state);
+
+			state = state_stack.top();
+			while (state != NULL && state->backtrack.empty() && state_stack.depth() > final_depth ) {
+				state_stack.pop();
+				delete state;
+				state = state_stack.top();
+			}
+			
+			if(state_stack.depth() == final_depth || (run_counter - runs_when_started) > 25 )
+			{
+				vector<trace_element> trace = create_trace();
+				return trace;
+			}
+
+			event_buffer.reset();
+			thread_table.reset();
+
+			depth = state_stack.depth();
+			run_counter++;
+
+			cout << " === run " << run_counter << " ===\n";
+
+			this->exec_test_target(setting.target.c_str());
+			event = event_buffer.get_the_first_event();
+			event_buffer.update_output_folders();
+			exec_transition(event);
+
+			for (i = 1; i < depth - 1; i++) {
+				state = state_stack[i];
+				if (state->sel_event.type == THREAD_CREATE) {
+					event = state->sel_event;
+
+					InspectEvent pre, post, first;
+					pre = event_buffer.get_event(event.thread_id);
+					exec_transition(pre);
+					post = event_buffer.get_event(event.thread_id);
+					exec_transition(post);
+					first = event_buffer.get_event(event.child_id);
+					exec_transition(first);
+
+					string thread_nm;
+					thread_table.add_thread(post.child_id, thread_nm, post.thread_arg);
+				} else {
+		#ifdef NLZ_COMM
+				    std::vector<InspectEvent> ev_vec = event_buffer.get_events(state->sel_event.thread_id);
+				    for(std::vector<InspectEvent>::iterator vit = ev_vec.begin(); vit != ev_vec.end(); vit++){ 
+					if (state->sel_event == *vit){
+					    break;
+					}
+				    }
+				    if (vit == ev_vec.end()) {
+					assert(state->sel_event.future == 1);
+				    }else{
+					assert (state->sel_event.future == 0 || state->sel_event.future == -1);//atomic
+				    }
+				    exec_transition(state->sel_event);
+		#else
+				    event = event_buffer.get_event(state->sel_event.thread_id);
+				    assert(event.valid());
+				    if (event != state->sel_event) {
+					cout << "event:      " << event.toString() << endl;
+					cout << "sel_event:  " << state->sel_event.toString() << endl;
+					assert(event == state->sel_event);
+				    }
+				    exec_transition(event);
+		#endif
+				}
+			}
+
+		//	cout<<"---------arrive at backtrack point--------, depth= "<<depth - 1<<endl;
+			assert(state_stack[depth - 1] == state_stack.top());
+			state = state_stack.top();
+
+
+		#ifdef NLZ_EVEC
+			TransitionSet::iterator it;
+			for (it = state->prog_state->enabled.begin();
+					it != state->prog_state->enabled.end(); it++) {
+			    assert (! (it->second.empty()) );
+			    std::vector<InspectEvent>& enabled_vec = it->second;
+			    std::vector<InspectEvent> ev_vec_got = event_buffer.get_events(enabled_vec.front().thread_id);
+			    for(std::vector<InspectEvent>::iterator vit=ev_vec_got.begin(); vit!=ev_vec_got.end(); ++vit){ // for each event received
+				std::vector<InspectEvent>::iterator vit2;
+				for(vit2=enabled_vec.begin(); vit2!=enabled_vec.end(); ++vit2){ // determine if it is in enabled
+				    if (*vit2 == *vit) break;
+				}
+				if(vit2==enabled_vec.end()){
+				    cout<<"==============debug info:\n";
+				    assert(vit2!=enabled_vec.end() && "!!!!!!!! events got is not in enabled!");
+				}
+			    }
+			}
+
+			for (it = state->prog_state->disabled.begin();
+					it != state->prog_state->disabled.end(); it++) {
+			    assert (! (it->second.empty()) );
+			    std::vector<InspectEvent>& disabled_vec = it->second;
+			    std::vector<InspectEvent> ev_vec_got = event_buffer.get_events(disabled_vec.front().thread_id);
+			    for(std::vector<InspectEvent>::iterator vit=ev_vec_got.begin(); vit!=ev_vec_got.end(); ++vit){ // for each event received
+				std::vector<InspectEvent>::iterator vit2;
+				for(vit2=disabled_vec.begin(); vit2!=disabled_vec.end(); ++vit2){ // determine if it is in disabled
+				    if (*vit2 == *vit) break;
+				}
+				if(vit2==disabled_vec.end()){
+				    cout<<"!!!!!!!! events got is not in disabled!"<<endl;
+				    abort();
+				}
+			    }
+			}
+		#else
+			TransitionSet::iterator it;
+			for (it = state->prog_state->enabled.begin();
+					it != state->prog_state->enabled.end(); it++) {
+				event = it->second;
+				event2 = event_buffer.get_event(event.thread_id);
+				assert(event == event2);
+			}
+
+			for (it = state->prog_state->disabled.begin();
+					it != state->prog_state->disabled.end(); it++) {
+				event = it->second;
+				event2 = event_buffer.get_event(event.thread_id);
+				assert(event == event2);
+			}
+		#endif
+
+		}
+	
+
+	#ifdef NLZ_EVEC
+		event = state->backtrack.get_front_transition(); 
+		
+	#else
+		event = state->backtrack.get_transition();//6.5 here it cause a bug when sel-ev is write and buffer is full, permit event is read, then it reply the same thing and not stop.
+	#endif
+
+		if (!event.valid()) {
+			cout << event.toString() << endl;
+			assert(event.valid());
+		}
+		state->backtrack.remove(event);
+
+
+		current_state = next_state(state, event, event_buffer);
+		this->check_property(state);
+
 
 		num_of_transitions++;
+		//state->sleepset.remove(event);  // TODO: why remove? Maybe: because we are doing backtrack checking, if we found new backtrack point in follow, next run we should choose the same transition here. So doneset doesn't mean we cannot do it again, it only indicates we ever did it.
+		state_stack.push(current_state);
 
-		state_stack.push(new_state);
-		current_state = new_state;
+		while (current_state->has_executable_transition()) {
 
-		if (setting.max_events != -1
-				&& setting.max_events < state_stack.depth()) {
-			// when the max number of events is reached
-			return;
+			update_backtrack_info(current_state);
+
+			if (setting.max_spins != -1)
+				event = current_state->get_transition_no_spin();
+			else
+				event = current_state->get_transition();
+
+			new_state = next_state(current_state, event, event_buffer);
+			this->check_property(current_state);
+
+			num_of_transitions++;
+
+			state_stack.push(new_state);
+			current_state = new_state;
+
+			if (setting.max_events != -1
+					&& setting.max_events < state_stack.depth()) {
+				// when the max number of events is reached
+				return;
+			}
+
 		}
 
-	}
+		verbose(4, state_stack.toString());
+		
+		if (!current_state->prog_state->disabled.empty()
+				& current_state->sleepset.empty()) {
+			//chao: 6/12/2012, do not handle exceptions here -- leave to the caller
+			throw DeadlockException();
+		}
 
-	verbose(4, state_stack.toString());
-	
-	if (!current_state->prog_state->disabled.empty()
-			& current_state->sleepset.empty()) {
-		//chao: 6/12/2012, do not handle exceptions here -- leave to the caller
-		throw DeadlockException();
+		if (!current_state->has_been_end()) {
+			kill(sut_pid, SIGTERM);
+			//cout << "Kill  " << sut_pid << flush << endl;
+			num_killed++;
+		}
 	}
-
-	if (!current_state->has_been_end()) {
-		kill(sut_pid, SIGTERM);
-		//cout << "Kill  " << sut_pid << flush << endl;
-		num_killed++;
-	}
-
-	vector<trace_element> trace = create_trace();
-	return trace;
-	//merge_trace_to_tree(trace);
 
 }
 
