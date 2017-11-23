@@ -19,6 +19,7 @@
 #include "scheduler_setting.hh"
 #include "event_relation_graph.hh"
 #include <boost/mpi.hpp>
+#include <boost/mpi/collectives.hpp>
 
 
 using std::vector;

@@ -933,7 +933,7 @@ void Scheduler::run() {
 
 void Scheduler::run_parallel(mpi::communicator world)
 {
-	int rank, total_procs;
+	int rank, total_procs, result;
 
 	rank = world.rank();
 	total_procs = world.size();
@@ -967,6 +967,9 @@ void Scheduler::run_parallel(mpi::communicator world)
 
 			while(!trace_buffer.empty() || some_proc_busy)
 			{
+				//if(sends_in_buffer>0)
+				//cout<< "\n+++++++++++++ SSSEEEENDDDS IN BUFFFEERRR ++++++++++++   "<<sends_in_buffer<<endl;
+
 				//send work to idle procs
 				if(sends_in_buffer<total_procs-1 && !trace_buffer.empty())
 				{
@@ -1041,20 +1044,12 @@ void Scheduler::run_parallel(mpi::communicator world)
 			assert(trace_buffer.empty());
 			trace.clear();
 
-			cout<<"\nprocess 1 is idle = "<<idle_procs[1];
-			cout<<"\nSome proc busy = "<<some_proc_busy; 
-
 			//send quit to all procs
 			for(int i=1;i<total_procs;i++)
 				world.send(i, 1, trace);
-
-			cout << endl;
-			cout << "===================================" << endl;
-			//cout << "Total number of runs:  " << run_counter<<endl;
-			return;
 		}
 		else
-		{
+		{	run_counter=0;
 			vector<trace_element> trace1, trace;
 			while(1)
 			{
@@ -1063,7 +1058,7 @@ void Scheduler::run_parallel(mpi::communicator world)
 			//	cout<<"RECEIVED WORK FROM MASTER"<<endl;
 
 				if(trace.empty())
-					return;
+					goto the_end;
 
 				trace1 = this->backtrack_checking(trace);
 
@@ -1072,6 +1067,18 @@ void Scheduler::run_parallel(mpi::communicator world)
 			//	cout<<"SENT RESULTS TO MASTER"<<endl;
 			}
 		}
+
+		the_end:
+		reduce(world, run_counter, result, std::plus<int>(), 0);
+
+		if(rank==0)
+		{
+			cout << endl;
+			cout << "===================================" << endl;
+			cout << "Total number of runs:  " << result<<endl;
+		}
+		return;
+
 	} catch (AssertException & e) {
 		cout << endl;
 		cout << "=================================" << endl;
@@ -1537,7 +1544,7 @@ State * state = NULL, *current_state = NULL, *new_state = NULL;
 
 			recreate_statestack(trace1);
 			
-			cout << " === run " << run_counter << " ===\n";
+			//cout << " === run " << run_counter << " ===\n";
 
 			state = state_stack.top();
 			while (state != NULL && state->backtrack.empty()) {
@@ -1553,7 +1560,6 @@ State * state = NULL, *current_state = NULL, *new_state = NULL;
 		else
 		{
 
-
 			state = state_stack.top();
 			while (state != NULL && state->backtrack.empty() && state_stack.depth() > final_depth ) {
 				state_stack.pop();
@@ -1561,7 +1567,7 @@ State * state = NULL, *current_state = NULL, *new_state = NULL;
 				state = state_stack.top();
 			}
 			
-			if(state_stack.depth() == final_depth || (run_counter - runs_when_started) > 25 )
+			if(state_stack.depth() == final_depth || (run_counter - runs_when_started) > min(run_counter*2,500) )
 			{
 				vector<trace_element> trace = create_trace();
 				return trace;
@@ -1573,7 +1579,7 @@ State * state = NULL, *current_state = NULL, *new_state = NULL;
 			depth = state_stack.depth();
 			run_counter++;
 
-			cout << " === run " << run_counter << " ===\n";
+			//cout << " === run " << run_counter << " ===\n";
 
 			this->exec_test_target(setting.target.c_str());
 			event = event_buffer.get_the_first_event();
