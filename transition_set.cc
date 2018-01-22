@@ -1,7 +1,7 @@
 #include "transition_set.hh"
 #include <cassert>
 #include <algorithm>
-#include "yices_path_computer_singleton.hh"
+#include <sstream>
 
 using namespace std;
 using namespace __gnu_cxx;
