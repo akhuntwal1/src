@@ -3,9 +3,7 @@
 #include <cassert>
 #include <sstream>
 #include <iostream>
-#include "inspect_ucg_graph.hh"
 
-#include "yices_path_computer_singleton.hh"
 
 using namespace std;
 using namespace __gnu_cxx;
@@ -352,9 +350,6 @@ bool ProgramState::check_race() {
 	    for (std::vector<InspectEvent>::iterator vit=it->second.begin(); vit != it->second.end(); vit++){
 		event = *vit;
 //		cout << "  [check]: " << event.toString() << endl;
-		if (yices_path_computer_singleton::getInstance()->verbose>=yices_path_computer_singleton::getInstance()->v_3) {
-			cout << "  [check]: " << event.toString() << endl;
-		}
 		race_events = enabled.get_race_events(event);
 		for (vit = race_events.begin(); vit!= race_events.end(); vit++){
 		    event2 = *vit;

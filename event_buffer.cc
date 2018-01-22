@@ -26,7 +26,6 @@ extern Scheduler* g_scheduler;
 #include "inspect_exception.hh"
 #include "scheduler_setting.hh"
 #include "inspect_pthread.hh"
-#include "yices_path_computer_singleton.hh"
 
 using namespace std;
 using namespace __gnu_cxx;
@@ -910,31 +909,8 @@ void EventBuffer::approve(InspectEvent & event) {
 	}
 
 	if (true) {
-		if (yices_path_computer_singleton::getInstance()->run_yices_replay) {
-			if (event.type == 23) {
-			} else if (event.type == 20 && event.thread_id != 0) {
-			} else if (event.type == 21 && event.thread_id != 0) {
-			} else {//after filtered the pre_create, thread start and thread end
-				yices_path_computer_singleton::getInstance()->event_map[yices_path_computer_singleton::getInstance()->event_map.size()
-						+ 1] = event;
-//
-			}
 
-		}
-
-//    string event_info=event.toString();
-//
-//
-//
-//    int size_map=yices_path_computer_singleton::getInstance()->result;
-//    yices_path_computer_singleton::getInstance()->event_map.insert(pair<string, int>(event_info, size_map));
-//    yices_path_computer_singleton::getInstance()->result++;
-//
-//   cout <<"_____________event info: "<< yices_path_computer_singleton::getInstance()->event_map[event_info] <<endl;
-
-		//mapWordRecVerb.insert(map<string, int>::value_type("look", 5)); /* value_type方式 */
-		// mapWordRecVerb.insert(pair<string, int>("walk", 6)); /* pair方式 */
-
+			;
 	}
 #endif //RSS_EXTENSION
 //chao: added on 4/7/2012

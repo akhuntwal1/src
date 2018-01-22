@@ -5,24 +5,15 @@ YICES_PATH = $(shell cd ../../yices-1.0.28; pwd)
 SMTDP_PATH = $(shell cd ../../smt_dp ; pwd)
 BOOST_PATH = /usr/local/lib
 
-AC_FLAGS = -DRSS_EXTENSION=1 -I$(YICES_PATH)/include -I$(SMTDP_PATH) -I$(BOOST_PATH)
+AC_FLAGS = -DRSS_EXTENSION=1 -I$(BOOST_PATH)
 
-LD_FLAGS_YICES1 = -Wl,-rpath,$(YICES_PATH)/lib
-LD_FLAGS_YICES2 = -Wl,-rpath-link,$(YICES_PATH)/lib
-LD_FLAGS_YICES3 = -Wl,-L,$(YICES_PATH)/lib
-LD_FLAGS_YICES = $(LD_FLAGS_YICES1) $(LD_FLAGS_YICES2) $(LD_FLAGS_YICES3) -lyices
-
-LD_FLAGS_SMTDP1 = -Wl,-rpath,$(SMTDP_PATH)/lib
-LD_FLAGS_SMTDP2 = -Wl,-rpath-link,$(SMTDP_PATH)/lib
-LD_FLAGS_SMTDP3 = -Wl,-L,$(SMTDP_PATH)/lib
-LD_FLAGS_SMTDP = $(LD_FLAGS_SMTDP1) $(LD_FLAGS_SMTDP2) $(LD_FLAGS_SMTDP3) -lsmtdp
 
 LD_FLAGS_BOOST1 = -Wl,-rpath,$(BOOST_PATH)
 LD_FLAGS_BOOST2 = -Wl,-rpath-link,$(BOOST_PATH)
 LD_FLAGS_BOOST3 = -Wl,-L,$(BOOST_PATH)
 LD_FLAGS_BOOST = $(LD_FLAGS_BOOST1) $(LD_FLAGS_BOOST2) $(LD_FLAGS_BOOST3) -lboost_mpi -lboost_serialization
 
-LD_FLAGS = $(LD_FLAGS_SMTDP) $(LD_FLAGS_YICES) $(LD_FLAGS_BOOST)
+LD_FLAGS = $(LD_FLAGS_BOOST)
 
 CCFLAGS = -g -pthread -D__USE_XOPEN2K -fpermissive -Wunused-variable -Wno-deprecated $(AC_FLAGS)
 
@@ -43,8 +34,6 @@ VRF_SRC_NAME  =  event_buffer                     \
                  program_state                    \
                  scheduler_setting                \
                  next_state                       \
-                 inspect_ucg_graph                \
-                 yices_path_computer_singleton    \
                  inspect_trace                    \
 
 

@@ -1,14 +1,13 @@
 #include "naling.def"
-#include "inspect_ucg_graph.hh"
+
 #include "scheduler.hh"
 #include "scheduler_setting.hh"
 #include <cstdlib>
 #include <cstring> 
 #include <iostream>
 #include <sys/time.h>
-#include "yices_c.h"
-#include "yices_path_computer_singleton.hh"
-#include "inspect_ucg_graph.hh"
+
+
 #include "lin_checker.hh"
 #include <boost/mpi.hpp>
 #include <mpi.h>
@@ -187,20 +186,6 @@ bool parsing_command_line(int argc, char* argv[]) {
 			setting.replay_file = argv[pos];
 			pos++;
 		}
-
-		else if (strcmp(arg, "--yices") == 0) {
-			pos++;
-			yices_path_computer_singleton::getInstance()->run_yices_replay =
-					true;
-			pos++;
-		}
-
-		else if (strcmp(arg, "--manual") == 0) {
-			pos++;
-			yices_path_computer_singleton::getInstance()->game_mode = true;
-			pos++;
-		}
-
 		else if (strcmp(arg, "--max-runs") == 0) {
 			pos++;
 			arg1 = argv[pos];
@@ -244,20 +229,6 @@ bool parsing_command_line(int argc, char* argv[]) {
 		} else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
 			print_usage();
 			exit(0);
-		} else if (strcmp(arg, "--verbose") == 0 || strcmp(arg, "-v") == 0) {
-			pos++;
-			if (pos == argc) {
-				print_usage();
-				exit(0);
-			}
-			if (isdigit(argv[pos][0])) {
-				verboseLevel = atoi(argv[pos]);
-				yices_path_computer_singleton::getInstance()->verbose =
-						verboseLevel;
-
-				pos++;
-			}
-
 		} else if (strncmp(arg, "-", 1) == 0) {
 			cout << "Incorrect usage of Inspect: " << "argument: \'" << arg
 					<< "\' is unknown.\n";
@@ -309,11 +280,6 @@ int main(int argc, char* argv[]) {
 	success_flag = parsing_command_line(argc, argv);
 	if (!success_flag)
 		return -1;
-
-	if (yices_path_computer_singleton::getInstance()->game_mode) {
-		cout << "game mode on! you can arrange the thread order as you like!"
-				<< endl;
-	}
 
 	g_scheduler = new Scheduler();
 

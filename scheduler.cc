@@ -27,7 +27,6 @@
 #include "scheduler.hh"
 #include "next_state.hh"
 
-#include "yices_path_computer_singleton.hh"
 
 using namespace std;
 
@@ -763,34 +762,15 @@ void Scheduler::run() {
 	DONE = false;
 
 	try {
+			this->monitor_first_run();
 
-		if (yices_path_computer_singleton::getInstance()->game_mode) {
-
-			this->free_run();
-		} else {
-				this->monitor_first_run();
-
-#ifdef NLZ_EVEC
-#else
-			//check argument --yices
-			if (yices_path_computer_singleton::getInstance()->run_yices_replay) {
-
-				yices_path_computer_singleton::getInstance()->compute_new_trace();
-
-				if (yices_path_computer_singleton::getInstance()->run_yices_replay) {
-					this->yices_run();
-				}
-
-			}
-#endif
 			if (config_lin_check_flag
 					&& (!config_lin_serial_flag || quasi_flag)) {
 				event_buffer.linChecker->print_check_trace();
 				event_buffer.linChecker->clear();
 			}
-			while (!DONE//state_stack.has_backtrack_points()
-					&& yices_path_computer_singleton::getInstance()->run_yices_replay
-							== false) {
+			while (!DONE)//state_stack.has_backtrack_points()
+			{
 				verbose(3, "has backtrack points");
 				run_counter++;
 
@@ -836,7 +816,6 @@ void Scheduler::run() {
 				//cout << state_stack.toString();
 			}
 			run_counter--;
-		}
 
 	} catch (AssertException & e) {
 		cout << endl;
@@ -1567,7 +1546,7 @@ State * state = NULL, *current_state = NULL, *new_state = NULL;
 				state = state_stack.top();
 			}
 			
-			if(state_stack.depth() == final_depth || (run_counter - runs_when_started) > min(run_counter*2,500) )
+			if(state_stack.depth() == final_depth || (run_counter - runs_when_started) > min(run_counter*2,30) )
 			{
 				vector<trace_element> trace = create_trace();
 				return trace;
