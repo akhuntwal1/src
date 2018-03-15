@@ -660,6 +660,20 @@ vector<trace_element> Scheduler::extract_trace()
 }
 
 
+float time_in_seconds(struct timeval * start_time, struct timeval * end_time) {
+	float sec;
+	float usec;
+
+	sec = end_time->tv_sec - start_time->tv_sec;
+	usec = end_time->tv_usec - start_time->tv_usec;
+
+	if (usec < 0) {
+		usec += 1000000;
+		sec--;
+	}
+
+	return sec + 0.00001*usec;
+}
 
 Scheduler::Scheduler() :
 		max_errors(1000000), num_of_errors_detected(0), num_of_transitions(0), num_of_states(
@@ -1381,6 +1395,7 @@ void Scheduler::monitor_first_run() {
 	TransitionSet::iterator tit;
 	//int replay_depth = 0; // used only for replay trace
 
+
 	cout << " === run " << run_counter << " ===\n";
 
 	this->exec_test_target(setting.target.c_str());
@@ -1470,6 +1485,7 @@ void Scheduler::monitor_first_run() {
 		}
 	}
 
+
 	verbose(2, state_stack.toString2());
 
 	if (!current_state->prog_state->disabled.empty()
@@ -1489,6 +1505,8 @@ bool Scheduler::examine_state(State * old_state, State * new_state) {
 }
 
 vector<trace_element> Scheduler::backtrack_checking(vector<trace_element> trace1) {
+
+	int CUTOFF = 20;
 
 	rubrik:
 	State * state = NULL, *current_state = NULL, *new_state = NULL;
@@ -1541,6 +1559,9 @@ vector<trace_element> Scheduler::backtrack_checking(vector<trace_element> trace1
 			}
 			else
 			{
+				struct timeval start_time, end_time;
+				if(runs_when_started == 0 && run_counter==1)
+					gettimeofday(&start_time, NULL);
 
 				state = state_stack.top();
 				while (state != NULL && state->backtrack.empty() && state_stack.depth() > final_depth ) {
@@ -1549,8 +1570,16 @@ vector<trace_element> Scheduler::backtrack_checking(vector<trace_element> trace1
 					state = state_stack.top();
 				}
 				
-				if(state_stack.depth() == final_depth || (run_counter - runs_when_started) > min(run_counter*2,30) )
+				if(state_stack.depth() == final_depth || (run_counter - runs_when_started) > min(run_counter*2,CUTOFF) )
 				{
+					if(runs_when_started == 0)
+					{	
+						gettimeofday(&end_time, NULL);
+						//cout<<"TIME DIFF "<<time_in_seconds(&start_time, &end_time)<<endl;
+						//cout<<"RUNS "<<run_counter - runs_when_started -1<<endl;
+						CUTOFF = 20/(time_in_seconds(&start_time, &end_time)/(run_counter - runs_when_started -1));
+						//cout<< "\n $$$$$$$$$$$$--------------CUTOFF-------------$$$$$$$$$$$$ = "<< CUTOFF<<endl;
+					} 
 					vector<trace_element> trace = create_trace();
 					return trace;
 				}
