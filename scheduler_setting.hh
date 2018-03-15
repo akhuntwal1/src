@@ -1,7 +1,7 @@
 #ifndef __INSPECT_SCHEDULER__SETTING_HH__
 #define __INSPECT_SCHEDULER__SETTING_HH__
 
-#define MAX_PROCESSES 32
+#define MAX_PROCESSES 1024
 
 #include "naling.def"
 #ifdef NLZ_FLAG
